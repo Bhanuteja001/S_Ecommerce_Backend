@@ -1,5 +1,12 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import User from '../models/userModel.js';
+import Category from '../models/categoryModel.js';
+import Product from '../models/productModel.js';
+import Cart from '../models/cartModel.js';
+import Order from '../models/orderModel.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

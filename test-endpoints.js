@@ -1,7 +1,12 @@
 import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const PORT = 5001; // Run verification test on a distinct port
 const BASE_URL = `http://127.0.0.1:${PORT}/api`;
