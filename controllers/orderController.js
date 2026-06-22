@@ -1,6 +1,8 @@
 import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import Cart from '../models/cartModel.js';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -215,6 +217,117 @@ const updateOrderStatus = async (req, res, next) => {
   }
 };
 
+
+// @desc    Create Razorpay Order
+// @route   POST /api/orders/:id/razorpay-order
+// @access  Private
+const createRazorpayOrder = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (order) {
+      // Authorization Check
+      if (
+        order.user.toString() !== req.user._id.toString() &&
+        !req.user.isAdmin
+      ) {
+        res.status(403);
+        return next(new Error('Not authorized to access this order'));
+      }
+
+      if (order.isPaid) {
+        res.status(400);
+        return next(new Error('Order is already paid'));
+      }
+
+      const keyId = process.env.RAZORPAY_KEY_ID || process.env.Test_API_Key;
+      const keySecret = process.env.RAZORPAY_KEY_SECRET || process.env.Test_Key_Secret;
+
+      if (!keyId || !keySecret) {
+        res.status(500);
+        return next(new Error('Razorpay API keys are not configured on the server'));
+      }
+
+      const instance = new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret,
+      });
+
+      // Amount in paise (INR). Convert USD to INR using a rate of 83.
+      const amountInINR = Math.round(order.totalPrice * 83 * 100);
+
+      const options = {
+        amount: amountInINR,
+        currency: 'INR',
+        receipt: order._id.toString(),
+      };
+
+      const razorpayOrder = await instance.orders.create(options);
+
+      res.status(201).json({
+        keyId,
+        razorpayOrder,
+      });
+    } else {
+      res.status(404);
+      return next(new Error('Order not found'));
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify Razorpay Payment Signature
+// @route   POST /api/orders/:id/verify-payment
+// @access  Private
+const verifyRazorpayPayment = async (req, res, next) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      res.status(404);
+      return next(new Error('Order not found'));
+    }
+
+    // Authorization Check
+    if (
+      order.user.toString() !== req.user._id.toString() &&
+      !req.user.isAdmin
+    ) {
+      res.status(403);
+      return next(new Error('Not authorized to access this order'));
+    }
+
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || process.env.Test_Key_Secret;
+
+    // Verify signature
+    const hmac = crypto.createHmac('sha256', keySecret);
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const generatedSignature = hmac.digest('hex');
+
+    if (generatedSignature !== razorpay_signature) {
+      res.status(400);
+      return next(new Error('Payment signature verification failed. Possible tampering.'));
+    }
+
+    // Update order status to paid
+    order.isPaid = true;
+    order.paidAt = Date.now();
+    order.paymentResult = {
+      id: razorpay_payment_id,
+      status: 'COMPLETED',
+      update_time: new Date().toISOString(),
+      email_address: req.user.email,
+    };
+
+    const updatedOrder = await order.save();
+    res.json(updatedOrder);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export {
   addOrderItems,
   getOrderById,
@@ -222,4 +335,7 @@ export {
   getMyOrders,
   getOrders,
   updateOrderStatus,
+  createRazorpayOrder,
+  verifyRazorpayPayment,
 };
+
