@@ -1,12 +1,10 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import User from '../models/userModel.js';
-import Category from '../models/categoryModel.js';
-import Product from '../models/productModel.js';
-import Cart from '../models/cartModel.js';
-import Order from '../models/orderModel.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
